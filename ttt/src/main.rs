@@ -14,10 +14,10 @@ enum Player {
     Oh,
 }
 
+// TODO: represent board with a hash map
 #[derive(Debug, Clone)]
 struct Game {
     board: Vec<Option<Player>>,
-    first_turn: Player,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,12 +36,12 @@ impl Player {
 }
 
 impl Game {
-    fn new(first_turn: Player) -> Game {
+    fn new() -> Game {
         return Game {
             board: vec![Option::None; 9],
-            first_turn,
         };
     }
+    // TODO: impl as display trait
     fn print(self, game_num: i32) {
         println!("game num {}", game_num);
         for row in self.board {
@@ -50,6 +50,7 @@ impl Game {
         println!("--------------");
     }
     fn take_turn(&mut self, player: Player) {
+        // TODO: improve board selection
         // randomly select a postion until valid
         let mut rng = rand::thread_rng();
         let pos = rng.gen_range(0..9);
@@ -59,9 +60,6 @@ impl Game {
         }
     }
     fn check(&self) -> Option<GameResult> {
-        if self.board.iter().all(|x| x.is_some()) {
-            return Some(GameResult::Draw);
-        }
         for player in [Player::Ex, Player::Oh] {
             for i in 0..3 {
                 // check vertical
@@ -111,6 +109,12 @@ impl Game {
                 return Some(GameResult::Win(player));
             }
         }
+
+        // TODO: test for checking winning case before draw
+        if self.board.iter().all(|x| x.is_some()) {
+            return Some(GameResult::Draw);
+        }
+
         return None;
     }
 }
@@ -129,10 +133,12 @@ fn main() {
         draws: 0,
         player: Player::Oh,
     };
-    for _ in 0..100 {
+
+    for _ in 0..1_000_000 {
         player = player.toggle();
-        let mut game = Game::new(player);
+        let mut game = Game::new();
         let result;
+
         loop {
             match game.check() {
                 Some(r) => {
@@ -143,6 +149,7 @@ fn main() {
             }
             game.take_turn(player);
         }
+
         match result {
             GameResult::Win(p) => match p {
                 Player::Ex => {
@@ -160,6 +167,7 @@ fn main() {
             }
         }
     }
+
     println!("{:?}", ex_stats);
     println!("{:?}", oh_stats);
 }
