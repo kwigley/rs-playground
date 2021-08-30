@@ -1,4 +1,6 @@
-use rand::Rng;
+use std::{borrow::BorrowMut, collections::HashMap, ptr::Pointee};
+
+use rand::{prelude::SliceRandom, Rng};
 
 #[derive(Debug)]
 struct GameStats {
@@ -14,13 +16,19 @@ enum Player {
     Oh,
 }
 
-// TODO: represent board with a hash map
-#[derive(Debug, Clone)]
-struct Game {
-    board: Vec<Option<Player>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Position {
+    X,
+    Y,
+    Z,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+struct Game {
+    board: HashMap<(Position, Position), Player>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 enum GameResult {
     Win(Player),
     Draw,
@@ -36,11 +44,33 @@ impl Player {
 }
 
 impl Game {
+    const all_tiles: Vec<(Position, Position)> = vec![
+        (Position::X, Position::X),
+        (Position::X, Position::Y),
+        (Position::X, Position::Z),
+        (Position::Y, Position::X),
+        (Position::Y, Position::Y),
+        (Position::Y, Position::Z),
+        (Position::Z, Position::X),
+        (Position::Z, Position::Y),
+        (Position::Z, Position::Z),
+    ];
+
     fn new() -> Game {
         return Game {
-            board: vec![Option::None; 9],
+            board: HashMap::new(),
         };
     }
+
+    fn get_empty_tiles(&self) -> Vec<(Position, Position)> {
+        Game::all_tiles
+            .into_iter()
+            .map(|tile| self.board.get_key_value(&tile))
+            .flatten()
+            .map(|(key, _)| *key)
+            .collect()
+    }
+
     // TODO: impl as display trait
     fn print(self, game_num: i32) {
         println!("game num {}", game_num);
@@ -50,18 +80,17 @@ impl Game {
         println!("--------------");
     }
     fn take_turn(&mut self, player: Player) {
-        // TODO: improve board selection
-        // randomly select a postion until valid
-        let mut rng = rand::thread_rng();
-        let pos = rng.gen_range(0..9);
-        match self.board[pos] {
-            Some(_) => self.take_turn(player),
-            None => self.board[pos] = Some(player),
-        }
+        // TODO: this will splode
+        let tile = self
+            .get_empty_tiles()
+            .choose(&mut rand::thread_rng())
+            .unwrap();
+        self.board.insert(*tile, player);
     }
     fn check(&self) -> Option<GameResult> {
+        // TODO: bookkeep game state
         for player in [Player::Ex, Player::Oh] {
-            for i in 0..3 {
+            for i in [Position::X, Position::Y, Position::Z] {
                 // check vertical
                 // x _ _ --> 0 3 6
                 // x _ _
