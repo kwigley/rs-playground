@@ -1,4 +1,7 @@
-use rand::Rng;
+use std::collections::HashMap;
+
+use rand::prelude::SliceRandom;
+use Position::{X, Y, Z};
 
 #[derive(Debug)]
 struct GameStats {
@@ -14,13 +17,19 @@ enum Player {
     Oh,
 }
 
-// TODO: represent board with a hash map
-#[derive(Debug, Clone)]
-struct Game {
-    board: Vec<Option<Player>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Position {
+    X,
+    Y,
+    Z,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+struct Game {
+    board: HashMap<(Position, Position), Player>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 enum GameResult {
     Win(Player),
     Draw,
@@ -35,13 +44,48 @@ impl Player {
     }
 }
 
+type Tile = (Position, Position);
+
 impl Game {
+    const ALL_TILES: [Tile; 9] = [
+        (X, X),
+        (X, Y),
+        (X, Z),
+        (Y, X),
+        (Y, Y),
+        (Y, Z),
+        (Z, X),
+        (Z, Y),
+        (Z, Z),
+    ];
+
+    const WINNING_LINES: [[Tile; 3]; 8] = [
+        [(X, X), (X, Y), (X, Z)], // h1
+        [(X, X), (Y, X), (Z, X)], // v1
+        [(X, X), (Y, Y), (Z, Z)], // d1
+        [(X, Y), (Y, Y), (Z, Y)], // v2
+        [(X, Z), (Y, Z), (Z, Z)], // v3
+        [(Y, X), (Y, Y), (Y, Z)], // h2
+        [(Z, X), (Y, Y), (X, Z)], // d3
+        [(Z, X), (Z, Y), (Z, Z)], // h3
+    ];
+
     fn new() -> Game {
         return Game {
-            board: vec![Option::None; 9],
+            board: HashMap::new(),
         };
     }
+
+    fn get_empty_tiles(&self) -> Vec<(Position, Position)> {
+        Game::ALL_TILES
+            .iter()
+            .filter(|tile| !self.board.contains_key(&tile))
+            .map(|x| *x)
+            .collect()
+    }
+
     // TODO: impl as display trait
+    #[allow(dead_code)]
     fn print(self, game_num: i32) {
         println!("game num {}", game_num);
         for row in self.board {
@@ -49,69 +93,32 @@ impl Game {
         }
         println!("--------------");
     }
+
     fn take_turn(&mut self, player: Player) {
-        // TODO: improve board selection
-        // randomly select a postion until valid
-        let mut rng = rand::thread_rng();
-        let pos = rng.gen_range(0..9);
-        match self.board[pos] {
-            Some(_) => self.take_turn(player),
-            None => self.board[pos] = Some(player),
-        }
+        // TODO: this will splode
+        self.board.insert(
+            *self
+                .get_empty_tiles()
+                .choose(&mut rand::thread_rng())
+                .unwrap(),
+            player,
+        );
     }
-    fn check(&self) -> Option<GameResult> {
-        for player in [Player::Ex, Player::Oh] {
-            for i in 0..3 {
-                // check vertical
-                // x _ _ --> 0 3 6
-                // x _ _
-                // x _ _
-                let vertical = self
-                    .board
-                    .iter()
-                    .skip(i)
-                    .step_by(3)
-                    .all(|v| *v == Some(player));
 
-                // check horizontal
-                // x x x --> 0 1 3
-                // _ _ _
-                // _ _ _
-                let horizontal = self
-                    .board
-                    .iter()
-                    .skip(i * 3)
-                    .take(3)
-                    .all(|v| *v == Some(player));
+    fn check(&self, player: Player) -> Option<GameResult> {
+        // check horizontal, vert, diag for given player
+        let is_winning_result = Game::WINNING_LINES
+            .iter()
+            .map(|line| {
+                line.iter()
+                    .map(|pos| self.board.get(pos))
+                    .all(|piece| piece.map_or(false, |p| *p == player))
+            })
+            .any(std::convert::identity);
 
-                if vertical || horizontal {
-                    return Some(GameResult::Win(player));
-                }
-            }
-            // check diag (left->right)
-            // x _ _ --> 0 4 8
-            // _ x _
-            // _ _ x
-            if self.board[0] == Some(player)
-                && self.board[4] == Some(player)
-                && self.board[8] == Some(player)
-            {
-                return Some(GameResult::Win(player));
-            }
-            // check diag (right->left)
-            // _ _ x --> 2 4 6
-            // _ x _
-            // x _ _
-            if self.board[2] == Some(player)
-                && self.board[4] == Some(player)
-                && self.board[6] == Some(player)
-            {
-                return Some(GameResult::Win(player));
-            }
-        }
-
-        // TODO: test for checking winning case before draw
-        if self.board.iter().all(|x| x.is_some()) {
+        if is_winning_result {
+            return Some(GameResult::Win(player));
+        } else if self.get_empty_tiles().is_empty() {
             return Some(GameResult::Draw);
         }
 
@@ -134,13 +141,13 @@ fn main() {
         player: Player::Oh,
     };
 
-    for _ in 0..1_000_000 {
+    for _ in 0..1000 {
         player = player.toggle();
         let mut game = Game::new();
         let result;
 
         loop {
-            match game.check() {
+            match game.check(player) {
                 Some(r) => {
                     result = r;
                     break;
