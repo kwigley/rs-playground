@@ -1,3 +1,5 @@
+mod exceptions;
+use crate::exceptions::TicTacToeError;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
 
@@ -16,9 +18,11 @@ pub enum Position {
     Z,
 }
 
+pub type TicTacToeBoard = HashMap<(Position, Position), Player>;
+
 #[derive(Debug, Clone)]
 pub struct Game {
-    pub board: HashMap<(Position, Position), Player>,
+    pub board: TicTacToeBoard,
     pub current_player: Player,
 }
 
@@ -83,7 +87,7 @@ impl Game {
                 }
                 _ => self.current_player = self.current_player.toggle(),
             }
-            self.take_turn(self.current_player);
+            let _ = self.take_turn(self.current_player);
         }
     }
 
@@ -95,15 +99,13 @@ impl Game {
             .collect()
     }
 
-    fn take_turn(&mut self, player: Player) {
-        // TODO: this could splode
-        self.board.insert(
-            *self
-                .get_empty_tiles()
-                .choose(&mut rand::thread_rng())
-                .unwrap(),
-            player,
-        );
+    fn take_turn(&mut self, player: Player) -> Result<(), TicTacToeError> {
+        let empties = self.get_empty_tiles();
+        let tile = empties
+            .choose(&mut rand::thread_rng())
+            .ok_or_else(|| TicTacToeError::FullBoardError(self.board.clone()))?;
+        self.board.insert(*tile, player);
+        Ok(())
     }
 
     fn check(&self, player: Player) -> Option<GameResult> {
