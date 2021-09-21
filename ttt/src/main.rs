@@ -23,6 +23,9 @@ impl fmt::Display for Stats {
 }
 
 fn main() {
+    // TODO: pull this out in a function
+    // test games played equals games requested
+    // test stats add up
     let mut stats = Stats {
         ex_wins: 0,
         oh_wins: 0,
