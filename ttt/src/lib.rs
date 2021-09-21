@@ -74,6 +74,7 @@ impl Game {
                 .unwrap(),
         };
     }
+
     pub fn play(mut self) -> GameResult {
         loop {
             match self.check(self.current_player) {

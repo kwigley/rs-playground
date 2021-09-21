@@ -6,6 +6,9 @@ use ttt::{Game, GameResult, Player};
 #[test]
 fn test_winning_state() {
     let mut board = HashMap::new();
+    // X X _
+    // O O X
+    // X O O
     board.insert((X, X), Player::Ex);
     board.insert((X, Y), Player::Ex);
     board.insert((Y, X), Player::Oh);
@@ -24,6 +27,9 @@ fn test_winning_state() {
 
 #[test]
 fn test_draw_state() {
+    // X O _
+    // X O X
+    // O X O
     let mut board = HashMap::new();
     board.insert((X, X), Player::Ex);
     board.insert((X, Y), Player::Oh);
