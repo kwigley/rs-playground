@@ -23,7 +23,7 @@ pub type TicTacToeBoard = HashMap<(Position, Position), Player>;
 #[derive(Debug, Clone)]
 pub struct Game {
     pub board: TicTacToeBoard,
-    pub current_player: Player,
+    first_player: Player,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
@@ -68,26 +68,22 @@ impl Game {
     ];
 
     pub fn new() -> Game {
-        // TODO: this could splode
-        // this could take a player as an arg and set as the current player
-        // but let's just pick one at random
-        return Game {
+        let i: i32 = rand::random();
+        let player = if i % 2 == 0 { Player::Ex } else { Player::Oh };
+        Game {
             board: HashMap::new(),
-            current_player: *[Player::Ex, Player::Oh]
-                .choose(&mut rand::thread_rng())
-                .unwrap(),
-        };
+            first_player: player,
+        }
     }
 
     pub fn play(mut self) -> GameResult {
         loop {
-            match self.check(self.current_player) {
+            match self.check() {
                 Some(r) => {
                     return r;
-                }
-                _ => self.current_player = self.current_player.toggle(),
+                },
+                None => self.take_turn(player);
             }
-            let _ = self.take_turn(self.current_player);
         }
     }
 
@@ -108,24 +104,25 @@ impl Game {
         Ok(())
     }
 
-    fn check(&self, player: Player) -> Option<GameResult> {
+    fn check(&self) -> Option<GameResult> {
         // check horizontal, vert, diag for given player
-        let is_winning_result = Game::WINNING_LINES
+        let winning_player = Game::WINNING_LINES
             .iter()
             .map(|line| {
-                line.iter()
-                    .map(|pos| self.board.get(pos))
-                    .all(|piece| piece.map_or(false, |p| *p == player))
+                let pieces: Vec<Option<&Player>> =
+                    line.iter().map(|pos| self.board.get(pos)).collect();
+                let head = pieces.first().and_then(|x| *x);
+                let tail = &pieces[1..];
+                tail.iter()
+                    .fold(head, |acc, &p| if acc == p { p } else { None })
             })
-            .any(std::convert::identity);
+            .fold(None, |_, p| if p.is_some() { p } else { None });
 
-        if is_winning_result {
-            return Some(GameResult::Win(player));
-        } else if self.get_empty_tiles().is_empty() {
-            return Some(GameResult::Draw);
+        match winning_player {
+            Some(player) => Some(GameResult::Win(*player)),
+            None if self.get_empty_tiles().is_empty() => Some(GameResult::Draw),
+            None => None,
         }
-
-        return None;
     }
 }
 
