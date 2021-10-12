@@ -76,18 +76,18 @@ impl Game {
         }
     }
 
-    pub fn play(mut self) -> GameResult {
+    pub fn play(mut self) -> Result<GameResult, TicTacToeError> {
         loop {
             match self.check() {
                 Some(r) => {
-                    return r;
-                },
-                None => self.take_turn(player);
+                    return Ok(r);
+                }
+                None => self.take_turn()?,
             }
         }
     }
 
-    fn get_empty_tiles(&self) -> Vec<(Position, Position)> {
+    fn empty_tiles(&self) -> Vec<(Position, Position)> {
         Game::ALL_TILES
             .iter()
             .filter(|tile| !self.board.contains_key(&tile))
@@ -95,12 +95,31 @@ impl Game {
             .collect()
     }
 
-    fn take_turn(&mut self, player: Player) -> Result<(), TicTacToeError> {
-        let empties = self.get_empty_tiles();
+    fn used_tiles(&self) -> Vec<(Position, Position)> {
+        Game::ALL_TILES
+            .iter()
+            .filter(|tile| self.board.contains_key(&tile))
+            .map(|x| *x)
+            .collect()
+    }
+
+    fn current_player(&self) -> Player {
+        // get number of used tiles
+        // if even -> current player = first player
+        // if odd --> current player = other player
+        if self.used_tiles().len() % 2 == 0 {
+            self.first_player
+        } else {
+            self.first_player.toggle()
+        }
+    }
+
+    fn take_turn(&mut self) -> Result<(), TicTacToeError> {
+        let empties = self.empty_tiles();
         let tile = empties
             .choose(&mut rand::thread_rng())
             .ok_or_else(|| TicTacToeError::FullBoardError(self.board.clone()))?;
-        self.board.insert(*tile, player);
+        self.board.insert(*tile, self.current_player());
         Ok(())
     }
 
@@ -109,18 +128,22 @@ impl Game {
         let winning_player = Game::WINNING_LINES
             .iter()
             .map(|line| {
-                let pieces: Vec<Option<&Player>> =
-                    line.iter().map(|pos| self.board.get(pos)).collect();
-                let head = pieces.first().and_then(|x| *x);
-                let tail = &pieces[1..];
-                tail.iter()
-                    .fold(head, |acc, &p| if acc == p { p } else { None })
+                let pieces: Vec<Option<Player>> = line
+                    .iter()
+                    .map(|pos| self.board.get(pos).copied()) //.map(|player| *player))
+                    .collect();
+                if let Some((head, tail)) = pieces.as_slice().split_first() {
+                    tail.iter()
+                        .fold(*head, |acc, &p| if acc == p { p } else { None })
+                } else {
+                    None
+                }
             })
             .fold(None, |_, p| if p.is_some() { p } else { None });
 
         match winning_player {
-            Some(player) => Some(GameResult::Win(*player)),
-            None if self.get_empty_tiles().is_empty() => Some(GameResult::Draw),
+            Some(player) => Some(GameResult::Win(player)),
+            None if self.empty_tiles().is_empty() => Some(GameResult::Draw),
             None => None,
         }
     }
@@ -146,10 +169,10 @@ mod test_ttt {
         board.insert((Z, Z), Player::Oh);
         let game = Game {
             board,
-            current_player: Player::Oh,
+            first_player: Player::Ex,
         };
         let result = game.play();
-        assert_eq!(result, GameResult::Win(Player::Ex))
+        assert_eq!(result, Ok(GameResult::Win(Player::Ex)))
     }
 
     #[test]
@@ -168,9 +191,9 @@ mod test_ttt {
         board.insert((Z, Z), Player::Oh);
         let game = Game {
             board,
-            current_player: Player::Oh,
+            first_player: Player::Ex,
         };
         let result = game.play();
-        assert_eq!(result, GameResult::Draw)
+        assert_eq!(result, Ok(GameResult::Draw))
     }
 }

@@ -37,16 +37,22 @@ fn main() {
         let game = Game::new();
 
         match game.play() {
-            GameResult::Win(p) => match p {
-                Player::Ex => {
-                    stats.ex_wins += 1;
-                }
-                Player::Oh => {
-                    stats.oh_wins += 1;
+            Ok(result) => match result {
+                GameResult::Win(p) => match p {
+                    Player::Ex => {
+                        stats.ex_wins += 1;
+                    }
+                    Player::Oh => {
+                        stats.oh_wins += 1;
+                    }
+                },
+                GameResult::Draw => {
+                    stats.draws += 1;
                 }
             },
-            GameResult::Draw => {
-                stats.draws += 1;
+            Err(e) => {
+                eprintln!("{:?}", e);
+                break;
             }
         }
         stats.total += 1;
