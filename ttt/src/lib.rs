@@ -1,5 +1,10 @@
+mod exceptions;
+use crate::exceptions::TicTacToeError;
 use rand::prelude::SliceRandom;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+};
 
 use Position::{X, Y, Z};
 
@@ -16,10 +21,60 @@ pub enum Position {
     Z,
 }
 
+// pub type TicTacToeBoard = HashMap<(Position, Position), Player>;
+
+#[derive(Debug, Clone, PartialEq)]
+struct Board {
+    board: HashMap<Tile, Player>,
+}
+
+impl Board {
+    const ALL_TILES: [Tile; 9] = [
+        (X, X),
+        (X, Y),
+        (X, Z),
+        (Y, X),
+        (Y, Y),
+        (Y, Z),
+        (Z, X),
+        (Z, Y),
+        (Z, Z),
+    ];
+
+    pub fn new() -> Self {
+        Board {
+            board: HashMap::new(),
+        }
+    }
+    pub fn insert(&self, tile: Tile, player: Player) -> Result<(), TicTacToeError> {
+        //TODO: test this behavior
+        if self.board.contains_key(&tile) {
+            Err(TicTacToeError::ExisitingTileError(tile))
+        } else {
+            self.board.insert(tile, player);
+            Ok(())
+        }
+    }
+    fn empty_tiles(&self) -> Vec<Tile> {
+        Board::ALL_TILES
+            .iter()
+            .filter(|tile| !self.board.contains_key(&tile))
+            .map(|x| *x)
+            .collect()
+    }
+    fn used_tiles(&self) -> Vec<Tile> {
+        Board::ALL_TILES
+            .iter()
+            .filter(|tile| self.board.contains_key(&tile))
+            .map(|x| *x)
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Game {
-    pub board: HashMap<(Position, Position), Player>,
-    pub current_player: Player,
+    pub board: Board,
+    first_player: Player,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
@@ -39,19 +94,18 @@ impl Player {
 
 type Tile = (Position, Position);
 
-impl Game {
-    const ALL_TILES: [Tile; 9] = [
-        (X, X),
-        (X, Y),
-        (X, Z),
-        (Y, X),
-        (Y, Y),
-        (Y, Z),
-        (Z, X),
-        (Z, Y),
-        (Z, Z),
-    ];
+struct DisplayTile {
+    tile: Tile,
+}
 
+impl Display for DisplayTile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // using debug output for Position!
+        write!(f, "({:?}, {:?})", self.tile.0, self.tile.1)
+    }
+}
+
+impl Game {
     const WINNING_LINES: [[Tile; 3]; 8] = [
         [(X, X), (X, Y), (X, Z)],
         [(X, X), (Y, X), (Z, X)],
@@ -64,66 +118,68 @@ impl Game {
     ];
 
     pub fn new() -> Game {
-        // TODO: this could splode
-        // this could take a player as an arg and set as the current player
-        // but let's just pick one at random
-        return Game {
-            board: HashMap::new(),
-            current_player: *[Player::Ex, Player::Oh]
-                .choose(&mut rand::thread_rng())
-                .unwrap(),
-        };
-    }
-
-    pub fn play(mut self) -> GameResult {
-        loop {
-            match self.check(self.current_player) {
-                Some(r) => {
-                    return r;
-                }
-                _ => self.current_player = self.current_player.toggle(),
-            }
-            self.take_turn(self.current_player);
+        let i: i32 = rand::random();
+        let player = if i % 2 == 0 { Player::Ex } else { Player::Oh };
+        Game {
+            board: Board::new(),
+            first_player: player,
         }
     }
 
-    fn get_empty_tiles(&self) -> Vec<(Position, Position)> {
-        Game::ALL_TILES
-            .iter()
-            .filter(|tile| !self.board.contains_key(&tile))
-            .map(|x| *x)
-            .collect()
+    pub fn play(mut self) -> Result<GameResult, TicTacToeError> {
+        loop {
+            match self.check() {
+                Some(r) => {
+                    return Ok(r);
+                }
+                None => self.take_turn()?,
+            }
+        }
     }
 
-    fn take_turn(&mut self, player: Player) {
-        // TODO: this could splode
-        self.board.insert(
-            *self
-                .get_empty_tiles()
-                .choose(&mut rand::thread_rng())
-                .unwrap(),
-            player,
-        );
+    fn current_player(&self) -> Player {
+        // get number of used tiles
+        // if even -> current player = first player
+        // if odd --> current player = other player
+        if self.board.used_tiles().len() % 2 == 0 {
+            self.first_player
+        } else {
+            self.first_player.toggle()
+        }
     }
 
-    fn check(&self, player: Player) -> Option<GameResult> {
+    fn take_turn(&mut self) -> Result<(), TicTacToeError> {
+        let empties = self.board.empty_tiles();
+        let tile = empties
+            .choose(&mut rand::thread_rng())
+            .ok_or_else(|| TicTacToeError::FullBoardError(self.board.clone()))?;
+        self.board.insert(*tile, self.current_player());
+        Ok(())
+    }
+
+    fn check(&self) -> Option<GameResult> {
         // check horizontal, vert, diag for given player
-        let is_winning_result = Game::WINNING_LINES
+        let winning_player = Game::WINNING_LINES
             .iter()
             .map(|line| {
-                line.iter()
-                    .map(|pos| self.board.get(pos))
-                    .all(|piece| piece.map_or(false, |p| *p == player))
+                let pieces: Vec<Option<Player>> = line
+                    .iter()
+                    .map(|pos| self.board.get(pos).copied()) //.map(|player| *player))
+                    .collect();
+                if let Some((head, tail)) = pieces.as_slice().split_first() {
+                    tail.iter()
+                        .fold(*head, |acc, &p| if acc == p { p } else { None })
+                } else {
+                    None
+                }
             })
-            .any(std::convert::identity);
+            .fold(None, |_, p| if p.is_some() { p } else { None });
 
-        if is_winning_result {
-            return Some(GameResult::Win(player));
-        } else if self.get_empty_tiles().is_empty() {
-            return Some(GameResult::Draw);
+        match winning_player {
+            Some(player) => Some(GameResult::Win(player)),
+            None if self.board.empty_tiles().is_empty() => Some(GameResult::Draw),
+            None => None,
         }
-
-        return None;
     }
 }
 
@@ -147,10 +203,10 @@ mod test_ttt {
         board.insert((Z, Z), Player::Oh);
         let game = Game {
             board,
-            current_player: Player::Oh,
+            first_player: Player::Ex,
         };
         let result = game.play();
-        assert_eq!(result, GameResult::Win(Player::Ex))
+        assert_eq!(result, Ok(GameResult::Win(Player::Ex)))
     }
 
     #[test]
@@ -169,9 +225,9 @@ mod test_ttt {
         board.insert((Z, Z), Player::Oh);
         let game = Game {
             board,
-            current_player: Player::Oh,
+            first_player: Player::Ex,
         };
         let result = game.play();
-        assert_eq!(result, GameResult::Draw)
+        assert_eq!(result, Ok(GameResult::Draw))
     }
 }
