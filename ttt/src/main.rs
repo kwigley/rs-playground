@@ -51,7 +51,7 @@ fn main() {
                 }
             },
             Err(e) => {
-                eprintln!("{:?}", e);
+                eprintln!("{}", e);
                 break;
             }
         }
