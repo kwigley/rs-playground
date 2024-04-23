@@ -48,11 +48,11 @@ impl Board {
     }
     pub fn insert(&mut self, tile: Tile, player: Player) -> Result<(), TicTacToeError> {
         //TODO: test this behavior
-        if self.board.contains_key(&tile) {
-            Err(TicTacToeError::ExisitingTileError(tile))
-        } else {
-            self.board.insert(tile, player);
+        if let std::collections::hash_map::Entry::Vacant(e) = self.board.entry(tile) {
+            e.insert(player);
             Ok(())
+        } else {
+            Err(TicTacToeError::ExisitingTileError(tile))
         }
     }
     pub fn get(&self, tile: Tile) -> Option<Player> {
@@ -61,16 +61,22 @@ impl Board {
     fn empty_tiles(&self) -> Vec<Tile> {
         Board::ALL_TILES
             .iter()
-            .filter(|tile| !self.board.contains_key(&tile))
-            .map(|x| *x)
+            .filter(|tile| !self.board.contains_key(tile))
+            .copied()
             .collect()
     }
     fn used_tiles(&self) -> Vec<Tile> {
         Board::ALL_TILES
             .iter()
-            .filter(|tile| self.board.contains_key(&tile))
-            .map(|x| *x)
+            .filter(|tile| self.board.contains_key(tile))
+            .copied()
             .collect()
+    }
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -161,7 +167,7 @@ impl Game {
 
     fn check(&self) -> Option<GameResult> {
         // check horizontal, vert, diag for given player
-        let winning_player = Game::WINNING_LINES
+        let winning_player = dbg!(Game::WINNING_LINES
             .iter()
             .map(|line| {
                 let pieces: Vec<Option<Player>> = line
@@ -175,13 +181,19 @@ impl Game {
                     None
                 }
             })
-            .fold(None, |_, p| if p.is_some() { p } else { None });
+            .fold(None, |_, p| if p.is_some() { p } else { None }));
 
         match winning_player {
             Some(player) => Some(GameResult::Win(player)),
             None if self.board.empty_tiles().is_empty() => Some(GameResult::Draw),
             None => None,
         }
+    }
+}
+
+impl Default for Game {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -197,27 +209,23 @@ mod test_ttt {
         Ok(game.check().unwrap())
     }
 
-    // #[test]
-    // fn test_winning_state() {
-    //     let mut board = HashMap::new();
-    //     // X X _
-    //     // O O X
-    //     // X O O
-    //     board.insert((X, X), Player::Ex);
-    //     board.insert((X, Y), Player::Ex);
-    //     board.insert((Y, X), Player::Oh);
-    //     board.insert((Y, Y), Player::Oh);
-    //     board.insert((Y, Z), Player::Ex);
-    //     board.insert((Z, X), Player::Ex);
-    //     board.insert((Z, Y), Player::Oh);
-    //     board.insert((Z, Z), Player::Oh);
-    //     let game = Game {
-    //         board,
-    //         first_player: Player::Ex,
-    //     };
-    //     let result = game.play();
-    //     assert_eq!(result, Ok(GameResult::Win(Player::Ex)))
-    // }
+    #[test]
+    fn test_winning_state() {
+        // X X _
+        // O O X
+        // X O O
+        let turns = vec![
+            ((X, X), Player::Ex),
+            ((Y, X), Player::Oh),
+            ((X, Y), Player::Ex),
+            ((Y, Y), Player::Oh),
+            ((Y, Z), Player::Ex),
+            ((Z, Y), Player::Oh),
+            ((X, Z), Player::Ex),
+        ];
+        let result = play_game(&turns);
+        assert_eq!(result, Ok(GameResult::Win(Player::Ex)))
+    }
 
     #[test]
     fn test_draw_state() {
